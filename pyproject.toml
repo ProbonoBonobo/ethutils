@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "ethutils"
+version = "0.1.0"
+description = ""
+authors = ["Kevin Zeidler <kzeidler@8thlight.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+websockets = "^11.0.3"
+web3 = "^6.10.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

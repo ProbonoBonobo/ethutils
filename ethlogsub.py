@@ -15,10 +15,14 @@ class EthLogSubscriber():
     
     def __init__(self, wss_provider_url, address, event_abi, callback_function, fromBlock='latest', fromDate=None, dateTolerance=60):
         """
-        Parameters
-        ----------
-        name : wss_provider_url
-            WSS endpoint e.g. wss://sepolia.infura.io/ws/v3/TOKEN
+        This code defines an initializer method for a class. The method takes several parameters including a
+        WebSocket endpoint URL, a contract address, an event ABI, a callback function, and optional parameters for
+        filtering events. The method initializes the instance variables of the class with the provided values. If a
+        fromDate is provided, it searches for the closest block within a specified tolerance and sets the fromBlock
+        to that block number.
+        Parameters ----------
+        name : str
+            wss_provider_url WSS endpoint e.g. wss://sepolia.infura.io/ws/v3/TOKEN
 
         address : str
             Contract address to watch e.g. '0xcbc671fb042ee2844a2e014477406369ab99efd7'
@@ -80,9 +84,15 @@ class EthLogSubscriber():
                 
     
     def _listener(self):
+        """
+        This method sets up an event listener for a specific Ethereum event.
+        """
         #  Set up these two because they are used over and over again:
         types = [i['type'] for i in self.abi['inputs']]
         names = [i['name'] for i in self.abi['inputs']]
+
+        # First we extracting the event types and names from the provided ABI (Application Binary Interface). It
+        # then calculates the keccak hash of the event signature using the event name and types.
 
         # Ha!  Yeah, we don't call the arg type normalizers (e.g. you cannot
         # use the alias 'uint'; you must use 'uint256').
@@ -92,12 +102,21 @@ class EthLogSubscriber():
         ev_sig_hash = Web3.keccak(text="%s(%s)" % (self.abi['name'], ",".join(types))).hex()
 
         def _mk_args(log):
+            """
+            Decodes the event log data and returns a dictionary mapping the event parameter names
+            to their corresponding values.
+            """
             data = log['data']
             bb = bytes.fromhex(data[2:]) # Remember to jump over 0x...
             values = eth_abi.decode(types, bb)  # The Juice
             return dict(zip(names, values))
 
         def _drain_captured():
+            """
+            Iterates over the captured event logs and calls the callback function with the event log and its
+            decoded arguments. It clears the captured logs after processing them.
+            :return:
+            """
             if len(self.captured) > 0:
                 for item in self.captured:
                     if item['blockNumber'] not in self.seen:
@@ -106,6 +125,11 @@ class EthLogSubscriber():
                 self.captured = []
             
         async def get_event():
+            """
+            Establishes a WebSocket connection to an Ethereum provider and subscribes to logs related to the
+            specified event signature. It then listens for incoming messages and processes the logs by calling
+            the appropriate functions based on the capaction value.
+            """
             async with connect(self.wss_provider_url) as wsock:
 
                 cmd = {"id": 1, "method": "eth_subscribe",
@@ -159,6 +183,15 @@ class EthLogSubscriber():
 
 
     def _find_block(self, timestamp, tolerance=60):
+        """
+        Searches for a block in a blockchain with a timestamp close to a given timestamp. It uses binary search to
+        efficiently find the block. The function takes in a timestamp and an optional tolerance parameter. It
+        initializes a Web3 object and retrieves the highest block number from the blockchain. It then iteratively
+        searches for a block with a timestamp close to the given timestamp within the specified tolerance. Once a
+        candidate block is found, it returns it. Finally, it cleans up the Web3 provider and returns the candidate
+        block.
+
+        """
         w3 = Web3(Web3.WebsocketProvider(self.wss_provider_url, websocket_timeout=60))
         highest_block = w3.eth.block_number
         block = w3.eth.get_block(highest_block)        
@@ -189,6 +222,12 @@ class EthLogSubscriber():
 
 
     def _do_historic(self):
+        """
+        Initializes a Web3 object, creates a filter for events in the contract, retrieves the event logs,
+        uninstalls the filter, and then processes the logs by calling a callback function and appending some
+        data to a list.
+        """
+
         def _managed_append(array, max_len, new_item):
             if max_len is not None and len(array) == max_len:
                 array.pop(0)
@@ -211,11 +250,16 @@ class EthLogSubscriber():
             for log in logs:
                 self.callback_function(log, log['args'])
                 self.seen.append(log['blockNumber'])
-                #_managed_append(self.seen, self.max_seen, log['blockNumber'])
+                _managed_append(self.seen, self.max_seen, log['blockNumber'])
 
                 
     def start(self):
-        """Activate the subscriber, including historic lookups."""
+        """
+        Starts a background thread that runs a listener function _listener. If capaction is equal to 1, the method
+        returns early to avoid multiple starts. If capaction is equal to -1, the method waits for 0.2 seconds before
+        continuing. Then, if fromBlock is not equal to 'latest', the method calls another function _do_historic.
+        Finally, capaction is set to 1.
+        """
         
         if self.capaction == 1:
             return  # defend against multiple starts...
@@ -243,6 +287,20 @@ class EthLogSubscriber():
 
 
 def main():
+    """
+    The main function is the entry point of the program. It performs the following tasks:
+
+    - Checks if the environment variable 'WSS_PROVIDER' is set. If not, it prints an error message and exits.
+    - Retrieves the value of the 'WSS_PROVIDER' environment variable.
+    - Defines an event ABI dictionary with the type, name, and inputs.
+    - Initializes a 'Dummy' class instance.
+    - Starts the event listener in a separate thread.
+    - Prints the number of historic events seen by the event listener.
+    - Performs other work for 30 seconds.
+    - Stops the event listener.
+
+    Note: The 'Dummy' class has a callback function that is executed when a new event is received.
+    """
     import os
 
     envvar = 'WSS_PROVIDER'
